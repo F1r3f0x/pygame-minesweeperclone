@@ -56,22 +56,35 @@ def setup():
 
 
 def initialize_board():
-    board_array = []
+    """
+    Initializes the game board with a specified number of mines.
 
+    This function creates a 2D array of Cell objects and shuffles them. The
+    first 10 cells are set to be mines, and the rest are set to be empty
+    cells. The Cell objects are then rearranged in a random order. The
+    number of adjacent mines is precomputed for each cell.
+
+    Returns:
+        list[list[Cell]]: The game board as a 2D array of Cell objects.
+    """
+    # Set random seed
     random.seed(time.time())
-    #random.seed(1.2)
-
+    
+    # Initialize board
+    board_array = []
     mines_count = 0
-
     for y in range(BOARD_HEIGHT * BOARD_WIDTH):
+        # Add mines until we reach the limit
         if mines_count < 10:
             board_array.append(Cell(mine=True))
             mines_count += 1
         else:
             board_array.append(Cell())
 
+    # Shuffle board to randomize mines
     random.shuffle(board_array)
 
+    # Convert to 2D array
     board = []
     for y in range(BOARD_HEIGHT):
         row = []
@@ -119,12 +132,15 @@ def draw_cell(screen, color, cell_x, cell_y, cell_size):
 
 def draw_board(screen, font, board):
     """
-    Draws a Minesweeper board on the screen.
+    Draws the game board on the screen.
 
-    The board is drawn with a cell size of CELL_SIZE and offset by 20 pixels from the
-    top and left of the screen. The board is drawn with a 1 pixel border.
-
-    :param screen: The pygame screen to draw on.
+    This function draws the game board on the screen given a pygame screen, a pygame font, and the game board.
+    The game board is drawn as a grid of cells with black borders. Each cell is colored according to its state:
+    - If a cell is flagged, it is yellow.
+    - If a cell is a mine and not revealed, it is red.
+    - If a cell is not revealed, it is gray.
+    - If a cell is revealed, it is white.
+    If a revealed cell has adjacent mines, the number of adjacent mines is drawn on the cell in black using the provided font.
     """
     cell_offset_x = 0
     cell_offset_y = 0
@@ -171,7 +187,10 @@ def draw_board(screen, font, board):
                 draw_cell(screen, "white", cell_x_pos, cell_y_pos, CELL_SIZE)
                 if cell.adj > 0:
                     text = font.render(str(cell.adj), True, "black")
-                    text_rect = text.get_rect(center=(cell_x_pos + (CELL_SIZE / 2), cell_y_pos + (CELL_SIZE / 2)))
+                    text_rect = text.get_rect(
+                        center=(cell_x_pos + (CELL_SIZE / 2),
+                                cell_y_pos + (CELL_SIZE / 2))
+                        )
                     screen.blit(text, text_rect)
 
 def draw_text(screen, font):
@@ -181,6 +200,15 @@ def draw_text(screen, font):
 
 
 def get_cell_pos_from_click(mouse_pos) -> Position | None:
+    """
+    Given a mouse position, this function returns the corresponding cell
+    position on the board in terms of a Position object. If the mouse position
+    is outside of the board, it returns None.
+
+    :param mouse_pos: The mouse position as a tuple (x, y)
+    :return: The cell position as a Position object, or None if it is outside
+             of the board.
+    """
     x = (mouse_pos[0] - BOARD_POSITION[0]) // CELL_SIZE
     y = (mouse_pos[1] - BOARD_POSITION[1]) // CELL_SIZE
     
@@ -191,7 +219,24 @@ def get_cell_pos_from_click(mouse_pos) -> Position | None:
 
 
 def process_game(board, clicked_pos: Position, mouse_left, mouse_right):
-    
+    """
+    Processes a game state change given a cell position and mouse event.
+
+    Given a cell position and mouse event (left or right click), this function
+    updates the game state accordingly. If the left mouse button is pressed and
+    the cell is a mine, the game is lost. If the left mouse button is pressed and
+    the cell is empty, the cell and all adjacent empty cells are revealed. If the
+    right mouse button is pressed and the cell is not revealed, the cell is
+    flagged or unflagged.
+
+    Args:
+        board (list[list[Cell]]): The game board.
+        clicked_pos (Position): The position of the cell that was clicked.
+        mouse_left (bool): True if the left mouse button was pressed, False
+            otherwise.
+        mouse_right (bool): True if the right mouse button was pressed, False
+            otherwise.
+    """
     clicked_cell = board[clicked_pos.y][clicked_pos.x]
     
     if mouse_left:
@@ -207,9 +252,19 @@ def process_game(board, clicked_pos: Position, mouse_left, mouse_right):
         clicked_cell.flagged = not clicked_cell.flagged
         
 def process_empty_cell(board, cell_pos: Position):
+    """
+    Recursively reveals all empty cells connected to the given cell.
+
+    If the given cell is not empty (i.e. has a mine or is flagged), does nothing.
+
+    Args:
+        board (list[list[Cell]]): The game board.
+        cell_pos (Position): The position of the cell to reveal.
+    """
     
     cell = board[cell_pos.y][cell_pos.x]
     
+    # Reveal and remove flag of clicked cell
     cell.revealed = True
     cell.flagged = False
     
@@ -233,7 +288,7 @@ def process_empty_cell(board, cell_pos: Position):
             
             neighbor.revealed = True
 
-            # Process only the empty cells
+            # Process only the empty neighboring cells
             if neighbor.adj == 0:
                 process_empty_cell(board, Position(x,y))
 
