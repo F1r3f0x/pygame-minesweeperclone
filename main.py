@@ -6,6 +6,7 @@
 
 import time
 import random
+import math
 from dataclasses import dataclass
 
 from pprint import pprint
@@ -37,6 +38,15 @@ class Cell:
 class Position:
     x: int = 0
     y: int = 0
+    
+@dataclass
+class GameState:
+    score: int = 0
+    time: int = 0
+    mines_left: int = 0
+    running: bool = False
+    
+game_state = GameState()
 
 def setup():
     """
@@ -50,7 +60,6 @@ def setup():
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("Minesweeper Clone - F1r3f0x")
     clock = pygame.time.Clock()
-    #font = pygame.font.Font("assets/PublicPixel.ttf", 18)
     font = pygame.freetype.Font("assets/PublicPixel.ttf", 18)
 
     return screen, clock, font
@@ -196,7 +205,19 @@ def draw_board(screen, font, board):
                     font.render_to(screen, text_pos, text, "black")  # Add it to the screen surface
 
 def draw_text(screen, font):
-    font.render_to(screen, (540, 20), "Minesweeper", "black")
+    x_pos = 540
+    y_pos = 20
+    y_offset = 20
+    
+    ui_text = {
+        "Minesweeper": (x_pos, y_pos),
+        f"Time: {math.floor(game_state.time)} ": (x_pos, y_pos + y_offset),
+        f"Score: {game_state.score}": (x_pos, y_pos + y_offset * 2),
+        f"Mines left: {game_state.mines_left}": (x_pos, y_pos + y_offset * 3)
+    }
+    
+    for text, pos in ui_text.items():
+        font.render_to(screen, pos, text, "black")
 
 
 def get_cell_pos_from_click(mouse_pos) -> Position | None:
@@ -305,13 +326,15 @@ def main():
     refresh_rate = pygame.display.get_current_refresh_rate()
 
     board = initialize_board()
+    game_state.running = True
 
-    while running:
+    while game_state.running:
         # poll for events
         # pygame.QUIT event means the user clicked X to close your window
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                running = False
+                game_state.running = False
+                break
 
         mouse_buttons = pygame.mouse.get_just_released()
         mouse_left = mouse_buttons[0]
@@ -336,7 +359,9 @@ def main():
         pygame.display.flip()
 
         # limits FPS to refresh rate
-        dt = clock.tick(refresh_rate) / 1000
+        dt = clock.tick(144) / 1000
+        game_state.time += dt
+        
 
     pygame.quit()
 
