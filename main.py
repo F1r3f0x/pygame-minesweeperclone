@@ -50,7 +50,8 @@ def setup():
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("Minesweeper Clone - F1r3f0x")
     clock = pygame.time.Clock()
-    font = pygame.font.Font("assets/PublicPixel.ttf", 18)
+    #font = pygame.font.Font("assets/PublicPixel.ttf", 18)
+    font = pygame.freetype.Font("assets/PublicPixel.ttf", 18)
 
     return screen, clock, font
 
@@ -186,17 +187,16 @@ def draw_board(screen, font, board):
             elif cell.revealed:
                 draw_cell(screen, "white", cell_x_pos, cell_y_pos, CELL_SIZE)
                 if cell.adj > 0:
-                    text = font.render(str(cell.adj), True, "black")
-                    text_rect = text.get_rect(
-                        center=(cell_x_pos + (CELL_SIZE / 2),
-                                cell_y_pos + (CELL_SIZE / 2))
-                        )
-                    screen.blit(text, text_rect)
+                    
+                    # Draw cell number
+                    text = str(cell.adj)  # Get the number of adjacent mines and convert it to a string
+                    text_rect = font.get_rect(text)  # Get the rect of the text
+                    center_x, center_y = cell_x_pos + (CELL_SIZE // 2), cell_y_pos + (CELL_SIZE // 2)  # Get the center of the cell
+                    text_pos = (center_x - (text_rect.width // 2), center_y - (text_rect.height // 2))  # Calculate the offset to center the text
+                    font.render_to(screen, text_pos, text, "black")  # Add it to the screen surface
 
 def draw_text(screen, font):
-    text = font.render("Minesweeper", True, "black")
-    text_rect = text.get_rect(top=20, left=540)
-    screen.blit(text, text_rect)
+    font.render_to(screen, (540, 20), "Minesweeper", "black")
 
 
 def get_cell_pos_from_click(mouse_pos) -> Position | None:
