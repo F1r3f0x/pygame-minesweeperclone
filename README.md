@@ -1,6 +1,6 @@
-# Pygame Minesweeper Clone (WIP)
+# Pygame Minesweeper Clone
 
-A simple Minesweeper clone built with Pygame.
+A really barebones Minesweeper clone built with Pygame. I just wanted to implement the algorithm.
 
 ## Requirements
 

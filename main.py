@@ -1,5 +1,5 @@
 """
-    Minesweeper Clone
+    Barebones Minesweeper Clone
     @Author: Patricio Labin (@f1r3f0x)
     2025
 """
@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pprint import pprint
 
 import pygame
+import pygame.freetype
 
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
@@ -22,9 +23,11 @@ BOARD_WIDTH = 10
 
 CELL_SIZE = 50  # Pixels
 
-MINES_EASY = 10
-MINES_MEDIUM = 30
-MINES_HARD = 60
+DIFFICULTIES = {
+    "Easy": 10,
+    "Medium": 25,
+    "Hard": 40
+}
 
 
 @dataclass
@@ -38,15 +41,22 @@ class Cell:
 class Position:
     x: int = 0
     y: int = 0
-    
+
 @dataclass
 class GameState:
-    score: int = 0
     time: int = 0
+    difficulty: str = "Easy"
     mines_left: int = 0
+    mines_total: int = 0
+    exploded: bool = False
     running: bool = False
-    
+    in_game: bool = False
+    in_menu: bool = True
+
 game_state = GameState()
+
+print(pygame.__version__)
+print(pygame.__file__)
 
 def setup():
     """
@@ -79,13 +89,13 @@ def initialize_board():
     """
     # Set random seed
     random.seed(time.time())
-    
+
     # Initialize board
     board_array = []
     mines_count = 0
     for y in range(BOARD_HEIGHT * BOARD_WIDTH):
         # Add mines until we reach the limit
-        if mines_count < 10:
+        if mines_count < game_state.mines_left:
             board_array.append(Cell(mine=True))
             mines_count += 1
         else:
@@ -102,7 +112,7 @@ def initialize_board():
             row.append(board_array[y * BOARD_WIDTH + x])
         board.append(row)
 
-    
+
     # Precompute mine counters
     for y in range(BOARD_HEIGHT):
         for x in range(BOARD_WIDTH):
@@ -110,7 +120,7 @@ def initialize_board():
             if cell.mine:
                 for local_y in range(-1, 2):
                     for local_x in range(-1, 2):
-                        if (x + local_x >= 0 and x + local_x < BOARD_WIDTH and y + local_y >= 0 
+                        if (x + local_x >= 0 and x + local_x < BOARD_WIDTH and y + local_y >= 0
                             and y + local_y < BOARD_HEIGHT):
                             local_cell = board[y + local_y][x + local_x]
                             local_cell.adj += 1
@@ -184,19 +194,16 @@ def draw_board(screen, font, board):
                 ),
                 1
             )
-            
+
             cell = board[y][x]
 
             if cell.flagged:
                 draw_cell(screen, "yellow", cell_x_pos, cell_y_pos, CELL_SIZE)
-            elif cell.mine and not cell.revealed:
-                draw_cell(screen, "red", cell_x_pos, cell_y_pos, CELL_SIZE)
             elif cell.revealed == False:
                 draw_cell(screen, "gray", cell_x_pos, cell_y_pos, CELL_SIZE)
             elif cell.revealed:
                 draw_cell(screen, "white", cell_x_pos, cell_y_pos, CELL_SIZE)
                 if cell.adj > 0:
-                    
                     # Draw cell number
                     text = str(cell.adj)  # Get the number of adjacent mines and convert it to a string
                     text_rect = font.get_rect(text)  # Get the rect of the text
@@ -204,18 +211,17 @@ def draw_board(screen, font, board):
                     text_pos = (center_x - (text_rect.width // 2), center_y - (text_rect.height // 2))  # Calculate the offset to center the text
                     font.render_to(screen, text_pos, text, "black")  # Add it to the screen surface
 
-def draw_text(screen, font):
+def draw_ingame_text(screen, font):
     x_pos = 540
     y_pos = 20
     y_offset = 20
-    
+
     ui_text = {
         "Minesweeper": (x_pos, y_pos),
         f"Time: {math.floor(game_state.time)} ": (x_pos, y_pos + y_offset),
-        f"Score: {game_state.score}": (x_pos, y_pos + y_offset * 2),
-        f"Mines left: {game_state.mines_left}": (x_pos, y_pos + y_offset * 3)
+        f"Mines: {game_state.mines_total}": (x_pos, y_pos + y_offset * 3)
     }
-    
+
     for text, pos in ui_text.items():
         font.render_to(screen, pos, text, "black")
 
@@ -232,7 +238,7 @@ def get_cell_pos_from_click(mouse_pos) -> Position | None:
     """
     x = (mouse_pos[0] - BOARD_POSITION[0]) // CELL_SIZE
     y = (mouse_pos[1] - BOARD_POSITION[1]) // CELL_SIZE
-    
+
     if x < 0 or x >= BOARD_WIDTH or y < 0 or y >= BOARD_HEIGHT:
         return None
 
@@ -259,19 +265,23 @@ def process_game(board, clicked_pos: Position, mouse_left, mouse_right):
             otherwise.
     """
     clicked_cell = board[clicked_pos.y][clicked_pos.x]
-    
+
     if mouse_left:
         if clicked_cell.mine:
-            print("You lost!")
+            game_state.exploded = True
             return
-        
+
         # Process empty cells
         if not clicked_cell.mine and not clicked_cell.revealed:
             process_empty_cell(board, clicked_pos)
-    
+
     if mouse_right and not clicked_cell.revealed:
         clicked_cell.flagged = not clicked_cell.flagged
-        
+        if clicked_cell.mine and clicked_cell.flagged:
+            game_state.mines_left -= 1
+        if clicked_cell.mine and not clicked_cell.flagged:
+            game_state.mines_left += 1
+
 def process_empty_cell(board, cell_pos: Position):
     """
     Recursively reveals all empty cells connected to the given cell.
@@ -282,36 +292,98 @@ def process_empty_cell(board, cell_pos: Position):
         board (list[list[Cell]]): The game board.
         cell_pos (Position): The position of the cell to reveal.
     """
-    
+
     cell = board[cell_pos.y][cell_pos.x]
-    
+
     # Reveal and remove flag of clicked cell
     cell.revealed = True
     cell.flagged = False
-    
+
     # If we clicked a mine or a flagged cell, we don't care.
     if cell.mine or cell.flagged or cell.adj != 0:
         return
-    
+
     # Check neighbors
     for x in range(cell_pos.x - 1, cell_pos.x + 2):
         for y in range(cell_pos.y - 1, cell_pos.y + 2):
-            
+
             # Check if neighbor is out of bounds.
             if x < 0 or x >= BOARD_WIDTH or y < 0 or y >= BOARD_HEIGHT:
                 continue
-            
+
             neighbor = board[y][x]
-            
+
             # Ignore cells we don't need to process.
             if neighbor.revealed or neighbor.flagged or neighbor.mine:
                 continue
-            
+
             neighbor.revealed = True
 
             # Process only the empty neighboring cells
             if neighbor.adj == 0:
                 process_empty_cell(board, Position(x,y))
+
+def in_game(screen, font, board):
+    mouse_buttons = pygame.mouse.get_just_released()
+    mouse_left = mouse_buttons[0]
+    mouse_right = mouse_buttons[2]
+    mouse_pos = pygame.mouse.get_pos()
+
+    if (mouse_left or mouse_right) and game_state.mines_left > 0 and not game_state.exploded:
+        mouse_pos = pygame.mouse.get_pos()
+        cell_pos = get_cell_pos_from_click(mouse_pos)
+        if cell_pos:
+            cell = board[cell_pos.y][cell_pos.x]
+            process_game(board, cell_pos, mouse_left, mouse_right)
+
+    # fill the screen with a color to wipe away anything from last frame
+    screen.fill("purple")
+    
+    if game_state.mines_left == 0:
+        font.render_to(screen, (SCREEN_WIDTH / 2, 100), "You win!", "white")
+        return
+    
+    if game_state.exploded:
+        font.render_to(screen, (SCREEN_WIDTH / 2, 100), "You lose!", "white")
+        return
+
+    draw_board(screen, font, board)
+    draw_ingame_text(screen, font)
+
+
+def in_menu(screen: pygame.display, font: pygame.freetype.Font):
+    mouse_buttons = pygame.mouse.get_just_released()
+    mouse_left = mouse_buttons[0]
+    mouse_right = mouse_buttons[2]
+    mouse_pos = pygame.mouse.get_pos()
+    
+    text_color = "white"
+    hover_color = "green"
+    
+    font.render_to(screen, (SCREEN_WIDTH / 2, 100), "Minesweeper", text_color)
+    
+    for i, (k, v) in enumerate(DIFFICULTIES.items()):
+        text_rect = font.get_rect(k)
+        center_y, center_x = 200 + (i * 100), 400
+        text_pos = (center_x - (text_rect.width // 2), center_y - (text_rect.height // 2))
+        
+        coll_gap = 25
+        coll_rect = pygame.Rect(text_pos, (text_rect.width + coll_gap, text_rect.height + coll_gap))
+        
+        color = text_color
+        if coll_rect.collidepoint(mouse_pos):
+            color = hover_color
+            if mouse_left:
+                game_state.in_game = True
+                game_state.difficulty = k
+                game_state.mines_left = v
+                game_state.mines_total = v
+                game_state.in_menu = False
+                return initialize_board()
+            
+        text_rect = font.render_to(screen, text_pos, k, color)
+            
+    
 
 def main():
     """
@@ -325,7 +397,7 @@ def main():
     dt = 0
     refresh_rate = pygame.display.get_current_refresh_rate()
 
-    board = initialize_board()
+    board = None
     game_state.running = True
 
     while game_state.running:
@@ -336,32 +408,19 @@ def main():
                 game_state.running = False
                 break
 
-        mouse_buttons = pygame.mouse.get_just_released()
-        mouse_left = mouse_buttons[0]
-        mouse_right = mouse_buttons[2]
-        mouse_pos = pygame.mouse.get_pos()
-
-        if mouse_left or mouse_right:
-            mouse_pos = pygame.mouse.get_pos()
-            cell_pos = get_cell_pos_from_click(mouse_pos)
-            if cell_pos:
-                cell = board[cell_pos.y][cell_pos.x]
-                print(cell)
-                process_game(board, cell_pos, mouse_left, mouse_right)
-
-        # fill the screen with a color to wipe away anything from last frame
-        screen.fill("purple")
-
-        draw_board(screen, font, board)
-        draw_text(screen, font)
+        if game_state.in_game:
+            in_game(screen, font, board)
+        else:
+            board = in_menu(screen, font)
 
         # flip() the display to put your work on screen
         pygame.display.flip()
 
         # limits FPS to refresh rate
         dt = clock.tick(144) / 1000
-        game_state.time += dt
         
+        if game_state.in_game and game_state.mines_left > 0 and not game_state.exploded:
+            game_state.time += dt
 
     pygame.quit()
 
